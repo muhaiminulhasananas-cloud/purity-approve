@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Purity Tracker — Accountability Partner Approval</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #060b16 0%, #0f172a 55%, #1e1b4b 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #f8fafc;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 22px;
+      padding: 28px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    }
+    .icon { font-size: 46px; margin-bottom: 12px; }
+    h1 { font-size: 21px; margin: 0 0 10px; color: #38bdf8; }
+    p { font-size: 14.5px; line-height: 1.6; color: #cbd5e1; margin: 0 0 18px; }
+    .btn-row { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 13px 22px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-approve { background: #10b981; color: #061018; }
+    .btn-deny { background: #ef4444; color: #ffffff; }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      display: none;
+    }
+    .status.ok { display: block; background: rgba(16, 185, 129, 0.16); border: 1px solid #10b981; color: #34d399; }
+    .status.err { display: block; background: rgba(239, 68, 68, 0.16); border: 1px solid #ef4444; color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🛡️</div>
+    <h1 id="titleText">Accountability Partner Decision</h1>
+    <p id="desc">
+      Verifying approval link...
+    </p>
+    <div class="btn-row" id="actions">
+      <button class="btn-approve" id="approveBtn" onclick="submitDecision('approved')" disabled>Approve</button>
+      <button class="btn-deny" id="denyBtn" onclick="submitDecision('denied')" disabled>Deny</button>
+    </div>
+    <div id="statusBox" class="status"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const reqId = (params.get("req") || "").trim();
+    const token = (params.get("token") || "").trim();
+    const PROJECT_ID = "purity-tracker-f4d76";
+
+    const descEl = document.getElementById("desc");
+    const statusBox = document.getElementById("statusBox");
+    const approveBtn = document.getElementById("approveBtn");
+    const denyBtn = document.getElementById("denyBtn");
+
+    let currentRequestType = "disable_blocker";
+
+    function showInvalidLink() {
+      approveBtn.disabled = true;
+      denyBtn.disabled = true;
+      descEl.textContent = "This approval link cannot be used.";
+      statusBox.className = "status err";
+      statusBox.textContent = "Invalid or expired approval link";
+    }
+
+    async function verifyLinkOnLoad() {
+      if (!reqId || !token) {
+        showInvalidLink();
+        return;
+      }
+
+      try {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/blocker_disable_requests/${encodeURIComponent(reqId)}`;
+        const getResp = await fetch(docUrl);
+        if (!getResp.ok) {
+          showInvalidLink();
+          return;
+        }
+
+        const existing = await getResp.json();
+        const savedToken = existing?.fields?.token?.stringValue || "";
+        if (!savedToken || savedToken !== token) {
+          showInvalidLink();
+          return;
+        }
+
+        currentRequestType = existing?.fields?.requestType?.stringValue || "disable_blocker";
+        const userName = existing?.fields?.userName?.stringValue || "Your partner";
+
+        if (currentRequestType === "change_partner") {
+          descEl.innerHTML = `<strong>${userName}</strong> requested to <strong>change or remove</strong> their Accountability Partner email in Purity Tracker.<br/><br/>Choose whether to approve or deny their request below:`;
+          approveBtn.textContent = "Approve Partner Change";
+          denyBtn.textContent = "Deny (Keep Locked)";
+        } else {
+          descEl.innerHTML = `<strong>${userName}</strong> requested to turn <strong>OFF</strong> the <strong>Block adult content</strong> switch in Purity Tracker.<br/><br/>Choose whether to approve or deny their request below:`;
+          approveBtn.textContent = "Approve Turn OFF";
+          denyBtn.textContent = "Deny (Keep Blocker ON)";
+        }
+
+        approveBtn.disabled = false;
+        denyBtn.disabled = false;
+      } catch (e) {
+        showInvalidLink();
+      }
+    }
+
+    async function submitDecision(newStatus) {
+      if (!reqId || !token) {
+        showInvalidLink();
+        return;
+      }
+
+      approveBtn.disabled = true;
+      denyBtn.disabled = true;
+      statusBox.className = "status ok";
+      statusBox.textContent = "Verifying and submitting your decision...";
+
+      try {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/blocker_disable_requests/${encodeURIComponent(reqId)}`;
+
+        // 1. Always GET the request document first; if GET fails OR token mismatches, NEVER PATCH
+        const getResp = await fetch(docUrl);
+        if (!getResp.ok) {
+          showInvalidLink();
+          return;
+        }
+
+        const existing = await getResp.json();
+        const savedToken = existing?.fields?.token?.stringValue || "";
+        if (!savedToken || savedToken !== token) {
+          showInvalidLink();
+          return;
+        }
+
+        currentRequestType = existing?.fields?.requestType?.stringValue || currentRequestType;
+
+        // 2. Include approvedByToken from URL in the PATCH body (field `approvedByToken`)
+        const patchUrl = `${docUrl}?updateMask.fieldPaths=status&updateMask.fieldPaths=decidedAt&updateMask.fieldPaths=approvedByToken`;
+        const body = {
+          fields: {
+            status: { stringValue: newStatus },
+            decidedAt: { integerValue: String(Date.now()) },
+            approvedByToken: { stringValue: token }
+          }
+        };
+
+        const resp = await fetch(patchUrl, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+          showInvalidLink();
+          return;
+        }
+
+        if (newStatus === "approved") {
+          statusBox.className = "status ok";
+          statusBox.textContent = currentRequestType === "change_partner"
+            ? "Approved! Their Accountability Partner email field has been unlocked."
+            : "Approved! The Adult Content Blocker on their phone will now turn OFF automatically.";
+        } else {
+          statusBox.className = "status err";
+          statusBox.textContent = currentRequestType === "change_partner"
+            ? "Denied! Their Accountability Partner email will remain locked."
+            : "Denied! The Adult Content Blocker will remain ON.";
+        }
+      } catch (err) {
+        showInvalidLink();
+      }
+    }
+
+    verifyLinkOnLoad();
+  </script>
+</body>
+</html>
