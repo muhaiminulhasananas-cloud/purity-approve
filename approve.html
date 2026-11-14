@@ -118,6 +118,10 @@
           descEl.innerHTML = `<strong>${userName}</strong> requested to <strong>change or remove</strong> their Accountability Partner email in Purity Tracker.<br/><br/>Choose whether to approve or deny their request below:`;
           approveBtn.textContent = "Approve Partner Change";
           denyBtn.textContent = "Deny (Keep Locked)";
+        } else if (currentRequestType === "reset_pin") {
+          descEl.innerHTML = `<strong>${userName}</strong> forgot their App Security PIN and requested your authorization to <strong>reset their PIN</strong> in Purity Tracker.<br/><br/>Choose whether to approve or deny their request below:`;
+          approveBtn.textContent = "Approve PIN Reset";
+          denyBtn.textContent = "Deny (Keep Current PIN)";
         } else {
           descEl.innerHTML = `<strong>${userName}</strong> requested to turn <strong>OFF</strong> the <strong>Block adult content</strong> switch in Purity Tracker.<br/><br/>Choose whether to approve or deny their request below:`;
           approveBtn.textContent = "Approve Turn OFF";
@@ -186,11 +190,15 @@
           statusBox.className = "status ok";
           statusBox.textContent = currentRequestType === "change_partner"
             ? "Approved! Their Accountability Partner email field has been unlocked."
+            : currentRequestType === "reset_pin"
+            ? "Approved! They can now set a new App Security PIN on their phone."
             : "Approved! The Adult Content Blocker on their phone will now turn OFF automatically.";
         } else {
           statusBox.className = "status err";
           statusBox.textContent = currentRequestType === "change_partner"
             ? "Denied! Their Accountability Partner email will remain locked."
+            : currentRequestType === "reset_pin"
+            ? "Denied! Their App Security PIN will remain unchanged."
             : "Denied! The Adult Content Blocker will remain ON.";
         }
       } catch (err) {
